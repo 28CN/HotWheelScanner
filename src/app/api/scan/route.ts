@@ -21,7 +21,9 @@ User wishlist keywords (set isOnWishlist=true only if the car name or make clear
 {WISHLIST}
 
 === BATCH / YEAR RULES (previous versions were wrong) ===
-- "batchYear" = the real release year of THIS casting/version. Cross-check via search + the collector number + copyright year. Given today's date, prefer 2025/2026 for cards that appear brand-new in stores.
+- "batchYear" = the year of the SPECIFIC card the user is holding right now, i.e. the release currently on store shelves — NOT the year the casting/tooling first debuted.
+- A casting can be re-released across several years. When search shows multiple years, pick the MOST RECENT release that matches the card artwork/collector number in the photo. Since today is {TODAY}, brand-new in-store cards are almost always the CURRENT year's line; do not report an earlier "debut" year (e.g. output 2026, not 2025, when this is the current-year release).
+- Cross-check via search + the collector number + the base copyright year (the copyright year is often ONE year BEFORE the actual line year — e.g. "©2025" bases appear in the 2026 line).
 - "series" = the line only (e.g. "Mainline", "Premium", "Car Culture", "Team Transport", "Matchbox"). The printed segment name (like "HW Starting Grid") is what the buyer already sees on the card, so it is NOT useful as extra info.
 - "batch" = the specific factory CASE/BATCH identifier (e.g. "2026 L Case", "Case P"). ONLY fill this if you can VERIFY it via search. If you cannot find the exact batch, return "" (empty) — do NOT guess or just echo the printed segment.
 
@@ -59,7 +61,7 @@ const DEEP_STORY_FIELD = `- story: string (optional, a short 1-sentence note in 
 function buildPrompt(mode: string, wishlistText: string): string {
   const isDeep = mode === "deep";
   const today = new Date().toISOString().slice(0, 10);
-  return BASE_PROMPT.replace("{TODAY}", today)
+  return BASE_PROMPT.replaceAll("{TODAY}", today)
     .replace("{WISHLIST}", wishlistText)
     .replace("{STORY_FIELD}", isDeep ? DEEP_STORY_FIELD : QUICK_STORY_FIELD)
     .concat(

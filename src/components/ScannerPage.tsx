@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { Camera, ImageIcon, Zap, Layers, Loader2, Sparkles } from "lucide-react";
 import type { ScanMode, ScannedCar } from "@/types/scan";
 import { getWishlist, saveScanSession } from "@/lib/storage";
+import { compressImage } from "@/lib/image";
 import ScanResults from "@/components/ScanResults";
 import CameraCapture from "@/components/CameraCapture";
 
@@ -22,46 +23,47 @@ export default function ScannerPage() {
     setCars(null);
     setLoading(true);
 
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
+    try {
+      // Downscale + re-encode so gallery originals don't exceed the serverless
+      // request-body limit (which returns a non-JSON "Request Entity Too Large").
+      const { dataUrl, base64, mimeType } = await compressImage(file);
       setImagePreview(dataUrl);
 
-      const base64 = dataUrl.split(",")[1];
-      const mimeType = file.type || "image/jpeg";
+      const wishlist = getWishlist();
+      const res = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ imageBase64: base64, mimeType, mode, wishlist }),
+      });
 
+      const raw = await res.text();
+      let data: { cars?: ScannedCar[]; error?: string } = {};
       try {
-        const wishlist = getWishlist();
-        const res = await fetch("/api/scan", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            imageBase64: base64,
-            mimeType,
-            mode,
-            wishlist,
-          }),
-        });
-
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "扫描失败");
-
-        setCars(data.cars);
-
-        saveScanSession({
-          id: crypto.randomUUID(),
-          timestamp: Date.now(),
-          mode,
-          imagePreview: dataUrl,
-          cars: data.cars,
-        });
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "扫描失败，请重试");
-      } finally {
-        setLoading(false);
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        throw new Error(
+          res.status === 413
+            ? "图片过大，请重试或换一张更小的照片"
+            : "服务器返回异常，请稍后重试",
+        );
       }
-    };
-    reader.readAsDataURL(file);
+      if (!res.ok) throw new Error(data.error || "扫描失败");
+
+      const cars = data.cars ?? [];
+      setCars(cars);
+
+      saveScanSession({
+        id: crypto.randomUUID(),
+        timestamp: Date.now(),
+        mode,
+        imagePreview: dataUrl,
+        cars,
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "扫描失败，请重试");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function onFileChange(e: React.ChangeEvent<HTMLInputElement>) {
