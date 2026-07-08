@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Hot Wheels Scanner | 风火轮扫描器
 
-## Getting Started
+移动端优先的 AI 视觉辅助淘货 Web App，支持 iOS/Android 手机浏览器直接使用。
 
-First, run the development server:
+## 功能
+
+- **快速扫雷模式** — 拍摄单辆 Hot Wheels 快速识别
+- **深度盘点模式** — 多车平放合影批量识别
+- **智能标签** — TH/STH、热门款、心愿单命中高亮
+- **动态筛选** — 按估价、关注度、批次年份筛选
+- **心愿单** — 本地保存关注车款，扫描时自动匹配
+- **扫描历史** — 最近 50 次记录本地保存
+
+## 技术栈
+
+- Next.js 16 (App Router) + TypeScript
+- Tailwind CSS v4
+- Google Gemini 1.5 Flash (Vision)
+- LocalStorage
+
+## 快速开始
 
 ```bash
+# 安装依赖
+npm install
+
+# 配置 API Key（复制示例文件后填入密钥）
+cp .env.example .env.local
+
+# 启动开发服务器
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+在 `.env.local` 中设置：
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+GEMINI_API_KEY=你的密钥
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+API Key 获取：[Google AI Studio](https://aistudio.google.com/apikey)
 
-## Learn More
+手机测试：确保手机和电脑在同一 WiFi，访问 `http://<电脑IP>:3000`
 
-To learn more about Next.js, take a look at the following resources:
+## 部署
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+支持 Vercel / 任意 Node.js 托管。部署时在环境变量中配置 `GEMINI_API_KEY`。
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```bash
+npm run build
+npm start
+```
 
-## Deploy on Vercel
+## 项目结构
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── api/scan/route.ts   # Gemini 视觉 API
+│   ├── page.tsx            # 扫描首页
+│   ├── wishlist/page.tsx   # 心愿单
+│   └── history/page.tsx    # 扫描历史
+├── components/             # UI 组件
+├── lib/storage.ts          # LocalStorage 工具
+└── types/scan.ts           # 类型定义
+```
