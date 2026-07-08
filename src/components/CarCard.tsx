@@ -1,7 +1,7 @@
 "use client";
 
 import type { ScannedCar } from "@/types/scan";
-import { Flame, Car, Star, BookOpen, Hash } from "lucide-react";
+import { Flame, Car, Star, BookOpen, Hash, Boxes } from "lucide-react";
 
 interface CarCardProps {
   car: ScannedCar;
@@ -20,12 +20,23 @@ const CONFIDENCE_COLOR: Record<string, string> = {
   low: "text-zinc-500",
 };
 
+function isKnown(value: unknown): value is string | number {
+  if (value == null) return false;
+  const s = String(value).trim().toLowerCase();
+  return s !== "" && s !== "unknown" && s !== "未知" && s !== "n/a";
+}
+
 export default function CarCard({ car, index }: CarCardProps) {
   const confidence = car.priceConfidence ?? "medium";
   const hasRange =
     car.priceLowUSD != null &&
     car.priceHighUSD != null &&
     car.priceHighUSD > car.priceLowUSD;
+
+  const meta = [
+    isKnown(car.series) ? car.series : null,
+    isKnown(car.batchYear) ? car.batchYear : null,
+  ].filter(Boolean);
 
   return (
     <article className="rounded-2xl border-2 border-zinc-700 bg-zinc-900 p-4">
@@ -35,15 +46,23 @@ export default function CarCard({ car, index }: CarCardProps) {
         </span>
         <div className="min-w-0 flex-1">
           <h3 className="text-lg font-bold leading-tight text-white">{car.name}</h3>
-          <p className="mt-1 text-base text-zinc-400">
-            {car.series} · {car.batchYear}
-          </p>
-          {car.collectorNumber && (
-            <p className="mt-0.5 flex items-center gap-1 text-sm text-zinc-500">
-              <Hash className="h-3.5 w-3.5" />
-              {car.collectorNumber}
-            </p>
+          {meta.length > 0 && (
+            <p className="mt-1 text-base text-zinc-400">{meta.join(" · ")}</p>
           )}
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-sm text-zinc-500">
+            {car.collectorNumber && (
+              <span className="flex items-center gap-1">
+                <Hash className="h-3.5 w-3.5" />
+                {car.collectorNumber}
+              </span>
+            )}
+            {isKnown(car.batch) && (
+              <span className="flex items-center gap-1">
+                <Boxes className="h-3.5 w-3.5" />
+                {car.batch}
+              </span>
+            )}
+          </div>
         </div>
         <div className="shrink-0 text-right">
           {hasRange ? (

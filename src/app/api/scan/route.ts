@@ -1,32 +1,43 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Tool } from "@google/generative-ai";
 import { NextRequest, NextResponse } from "next/server";
 import type { ScannedCar } from "@/types/scan";
 
-const BASE_PROMPT = `You are a world-class Hot Wheels / Matchbox die-cast appraiser. Your knowledge base is the Hot Wheels Fandom Wiki (https://hotwheels.fandom.com/wiki/Hot_Wheels), Hot Wheels Wiki collector guides, and eBay sold-listing data. Be precise and honest — never invent facts.
+// Google Search grounding tool (name differs across model generations; cast to
+// keep TS happy with the SDK's older Tool typing).
+const SEARCH_TOOL = [{ googleSearch: {} }] as unknown as Tool[];
 
-Carefully READ every legible text on the blister card and base: car name, collector number (e.g. "62/250"), series sub-line (e.g. "1/12"), copyright year, and "©20XX Mattel". Use these printed clues as the primary source of truth over your memory.
+const BASE_PROMPT = `You are a world-class Hot Wheels / Matchbox die-cast appraiser with LIVE web access via Google Search. TODAY IS {TODAY}. You MUST use search to verify current facts instead of relying on outdated memory.
+
+=== USE SEARCH — DO NOT GUESS FROM OLD DATA ===
+- Actively search the Hot Wheels Fandom Wiki (https://hotwheels.fandom.com/wiki/Hot_Wheels), Matchbox Fandom Wiki, and recent eBay SOLD listings for EACH car before answering.
+- Your training memory is outdated. Cars found NEW on store shelves right now are current-year (2025–2026) releases. Never default to old years like 2023/2024 unless search confirms it.
+- IMPORTANT FACT to verify and apply: Hot Wheels REGAINED the Ferrari license for 2025–2026. Ferrari castings ARE part of current Hot Wheels mainline/premium lines again — do NOT say Ferrari left Hot Wheels or treat it as discontinued.
+- "Matchbox The Movie" is a brand-new 2025/2026 series — treat such new lines as current.
+
+=== READ THE CARD FIRST ===
+Read every legible text on the blister card and base: car name, collector number (e.g. "62/250"), series/segment printed on the card, and the "©20XX Mattel" copyright year on the base. Printed text overrides memory.
 
 User wishlist keywords (set isOnWishlist=true only if the car name or make clearly matches a keyword):
 {WISHLIST}
 
-=== HOW TO READ BATCH / YEAR (very important, previous versions got this wrong) ===
-- "batchYear" MUST be the actual model/release year of THIS specific casting, not a generic guess.
-- Determine year from: the collector number range printed on the card, the card artwork style, and the copyright year on the base. A "©2025 Mattel" base usually means a 2026 line release, so weigh printed collector numbers heavily.
-- "series" = the actual line/segment: "Mainline (Basic)", "HW <Segment> e.g. HW Race Day", "Car Culture", "Team Transport", "Premium", "Matchbox" etc. Read the segment name printed on the card if visible. Do NOT output vague values like "Mainline 2024" — put the series in "series" and the year in "batchYear" separately.
-- If unsure of the exact year, give your best single year and lower priceConfidence to "low".
+=== BATCH / YEAR RULES (previous versions were wrong) ===
+- "batchYear" = the real release year of THIS casting/version. Cross-check via search + the collector number + copyright year. Given today's date, prefer 2025/2026 for cards that appear brand-new in stores.
+- "series" = the line only (e.g. "Mainline", "Premium", "Car Culture", "Team Transport", "Matchbox"). The printed segment name (like "HW Starting Grid") is what the buyer already sees on the card, so it is NOT useful as extra info.
+- "batch" = the specific factory CASE/BATCH identifier (e.g. "2026 L Case", "Case P"). ONLY fill this if you can VERIFY it via search. If you cannot find the exact batch, return "" (empty) — do NOT guess or just echo the printed segment.
 
-=== HOW TO PRICE (must be realistic & stable) ===
-- Mainline/basic cars retail around $1.25–$1.50 USD. Loose/common secondary value is usually $1–$4. NEVER output a price below $1 for a real carded car, and NEVER below plausible retail.
-- Premium / Car Culture / Team Transport: typically $8–$30.
-- Treasure Hunt (TH): usually $5–$15. Super Treasure Hunt (STH, has real-rider rubber tires + TH flame logo): usually $15–$60+.
-- Give a price RANGE, not a single fragile guess: priceLowUSD and priceHighUSD reflect realistic carded secondary-market value. estimatedPriceUSD = midpoint.
-- Set priceConfidence: "high" if it's a well-known casting you can price confidently, "medium" if reasonable, "low" if you are guessing.
+=== PRICING RULES — collector-to-collector, NOT retail ===
+- Price the SINGLE individual card at its player-to-player secondary market value, based on recent eBay/collector SOLD prices for THIS exact casting.
+- EXCLUDE retail/supermarket/big-box prices entirely. Ignore the ~$1.25 store cost and multi-pack bulk pricing — the user already knows the store price; they want the collector resale value of this one card.
+- Give a TIGHT, targeted range: priceHighUSD should be at most ~1.8x priceLowUSD unless the casting is genuinely volatile. A huge range (e.g. 2–6) is unhelpful; narrow it using sold data.
+- If a common mainline casting has no real collector premium, say so honestly (low resale, e.g. $1.5–2.5) rather than inflating.
+- estimatedPriceUSD = midpoint. priceConfidence: "high" only when backed by sold listings, "medium" if reasoned, "low" if guessing (also narrow scope when low).
 
 === FIELDS (return each car as one JSON object) ===
 - id: string (sequential "1", "2", "3"...)
 - name: string (full casting name exactly as printed)
-- series: string (line/segment only)
+- series: string (line only)
 - batchYear: number (4-digit release year of THIS casting)
+- batch: string (verified case/batch id, else "")
 - collectorNumber: string (e.g. "62/250" or "1/12" if printed, else "")
 - isTreasureHunt: boolean (true only for TH or STH)
 - isHotModel: boolean (true for licensed premium/appreciating makes: Ferrari, Porsche, Skyline/GTR, Lamborghini, McLaren, Datsun, JDM icons, movie tie-ins)
@@ -47,7 +58,9 @@ const DEEP_STORY_FIELD = `- story: string (optional, a short 1-sentence note in 
 
 function buildPrompt(mode: string, wishlistText: string): string {
   const isDeep = mode === "deep";
-  return BASE_PROMPT.replace("{WISHLIST}", wishlistText)
+  const today = new Date().toISOString().slice(0, 10);
+  return BASE_PROMPT.replace("{TODAY}", today)
+    .replace("{WISHLIST}", wishlistText)
     .replace("{STORY_FIELD}", isDeep ? DEEP_STORY_FIELD : QUICK_STORY_FIELD)
     .concat(
       isDeep
@@ -89,6 +102,27 @@ function toUserFriendlyError(message: string): string {
   return message;
 }
 
+async function callModel(
+  genAI: GoogleGenerativeAI,
+  modelName: string,
+  prompt: string,
+  data: string,
+  mimeType: string,
+  withSearch: boolean,
+): Promise<string> {
+  const model = genAI.getGenerativeModel({ model: modelName });
+  const result = await model.generateContent({
+    contents: [
+      {
+        role: "user",
+        parts: [{ text: prompt }, { inlineData: { mimeType, data } }],
+      },
+    ],
+    ...(withSearch ? { tools: SEARCH_TOOL } : {}),
+  });
+  return result.response.text();
+}
+
 async function generateWithVision(
   apiKey: string,
   prompt: string,
@@ -96,25 +130,23 @@ async function generateWithVision(
   mimeType: string,
 ) {
   const genAI = new GoogleGenerativeAI(apiKey);
+  const data = imageBase64.replace(/^data:image\/\w+;base64,/, "");
   let lastError: unknown;
 
   for (const modelName of DEFAULT_MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({ model: modelName });
-      const result = await model.generateContent([
-        prompt,
-        {
-          inlineData: {
-            mimeType,
-            data: imageBase64.replace(/^data:image\/\w+;base64,/, ""),
-          },
-        },
-      ]);
-      return result.response.text();
-    } catch (error) {
-      lastError = error;
-      const message = error instanceof Error ? error.message : "";
-      if (!isRetryableModelError(message)) throw error;
+    // Prefer a web-grounded call; if a model rejects the search tool, retry the
+    // same model without grounding before moving on.
+    for (const withSearch of [true, false]) {
+      try {
+        return await callModel(genAI, modelName, prompt, data, mimeType, withSearch);
+      } catch (error) {
+        lastError = error;
+        const message = error instanceof Error ? error.message : "";
+
+        if (isRetryableModelError(message)) break; // quota/404 → next model
+        if (withSearch) continue; // likely tool unsupported → retry ungrounded
+        throw error; // ungrounded also failed for a non-retryable reason
+      }
     }
   }
 
@@ -156,6 +188,7 @@ function parseCarsFromResponse(text: string): ScannedCar[] {
       name: car.name ?? "Unknown Car",
       series: car.series ?? "Unknown",
       batchYear: car.batchYear ?? "Unknown",
+      batch: car.batch || undefined,
       collectorNumber: car.collectorNumber || undefined,
       isTreasureHunt: Boolean(car.isTreasureHunt),
       isHotModel: Boolean(car.isHotModel),

@@ -3,6 +3,7 @@ export interface ScannedCar {
   name: string;
   series: string;
   batchYear: number | string;
+  batch?: string;
   collectorNumber?: string;
   isTreasureHunt: boolean;
   isHotModel: boolean;
