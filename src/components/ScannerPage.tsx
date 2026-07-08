@@ -5,6 +5,7 @@ import { Camera, ImageIcon, Zap, Layers, Loader2 } from "lucide-react";
 import type { ScanMode, ScannedCar } from "@/types/scan";
 import { getWishlist, saveScanSession } from "@/lib/storage";
 import ScanResults from "@/components/ScanResults";
+import CameraCapture from "@/components/CameraCapture";
 
 export default function ScannerPage() {
   const [mode, setMode] = useState<ScanMode>("quick");
@@ -12,8 +13,8 @@ export default function ScannerPage() {
   const [error, setError] = useState<string | null>(null);
   const [cars, setCars] = useState<ScannedCar[] | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [showCamera, setShowCamera] = useState(false);
 
-  const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   async function handleImageFile(file: File) {
@@ -126,7 +127,7 @@ export default function ScannerPage() {
             <button
               type="button"
               disabled={loading}
-              onClick={() => cameraInputRef.current?.click()}
+              onClick={() => setShowCamera(true)}
               className="flex w-full items-center justify-center gap-3 rounded-2xl bg-amber-500 py-5 text-lg font-black text-zinc-950 transition-colors hover:bg-amber-400 disabled:opacity-50"
             >
               {loading ? (
@@ -149,20 +150,22 @@ export default function ScannerPage() {
           </div>
 
           <input
-            ref={cameraInputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={onFileChange}
-          />
-          <input
             ref={galleryInputRef}
             type="file"
-            accept="image/*"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
             className="hidden"
             onChange={onFileChange}
           />
+
+          {showCamera && (
+            <CameraCapture
+              onCapture={(file) => {
+                setShowCamera(false);
+                handleImageFile(file);
+              }}
+              onClose={() => setShowCamera(false)}
+            />
+          )}
         </>
       )}
 
