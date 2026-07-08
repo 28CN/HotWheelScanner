@@ -27,6 +27,50 @@ For each car return a JSON object with these exact fields:
 Respond ONLY with a valid JSON array. No markdown, no explanation. Example:
 [{"id":"1","name":"'71 Porsche 911","series":"Mainline","batchYear":2025,"isTreasureHunt":false,"isHotModel":true,"isOnWishlist":false,"estimatedPriceUSD":3.5,"recommendation":"热门保时捷款，值得收藏"}]`;
 
+const DEFAULT_MODELS = [
+  process.env.GEMINI_MODEL,
+  "gemini-2.0-flash",
+  "gemini-2.5-flash",
+  "gemini-1.5-flash-latest",
+].filter((model): model is string => Boolean(model));
+
+async function generateWithVision(
+  apiKey: string,
+  prompt: string,
+  imageBase64: string,
+  mimeType: string,
+) {
+  const genAI = new GoogleGenerativeAI(apiKey);
+  let lastError: unknown;
+
+  for (const modelName of DEFAULT_MODELS) {
+    try {
+      const model = genAI.getGenerativeModel({ model: modelName });
+      const result = await model.generateContent([
+        prompt,
+        {
+          inlineData: {
+            mimeType,
+            data: imageBase64.replace(/^data:image\/\w+;base64,/, ""),
+          },
+        },
+      ]);
+      return result.response.text();
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : "";
+      const retryable =
+        message.includes("404") ||
+        message.includes("not found") ||
+        message.includes("not supported");
+
+      if (!retryable) throw error;
+    }
+  }
+
+  throw lastError ?? new Error("No compatible Gemini model available");
+}
+
 function parseCarsFromResponse(text: string): ScannedCar[] {
   const cleaned = text
     .replace(/```json\s*/gi, "")
@@ -79,20 +123,12 @@ export async function POST(request: NextRequest) {
       mode === "deep" ? "deep (multi-car inventory)" : "quick (single car)",
     );
 
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
-
-    const result = await model.generateContent([
+    const responseText = await generateWithVision(
+      apiKey,
       prompt,
-      {
-        inlineData: {
-          mimeType,
-          data: imageBase64.replace(/^data:image\/\w+;base64,/, ""),
-        },
-      },
-    ]);
-
-    const responseText = result.response.text();
+      imageBase64,
+      mimeType,
+    );
     const cars = parseCarsFromResponse(responseText);
 
     return NextResponse.json({ cars });

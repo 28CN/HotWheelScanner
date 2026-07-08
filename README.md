@@ -15,7 +15,7 @@
 
 - Next.js 16 (App Router) + TypeScript
 - Tailwind CSS v4
-- Google Gemini 1.5 Flash (Vision)
+- Google Gemini 2.0 Flash (Vision, auto-fallback)
 - LocalStorage
 
 ## 快速开始
