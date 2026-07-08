@@ -29,10 +29,33 @@ Respond ONLY with a valid JSON array. No markdown, no explanation. Example:
 
 const DEFAULT_MODELS = [
   process.env.GEMINI_MODEL,
-  "gemini-2.0-flash",
+  "gemini-2.0-flash-lite",
+  "gemini-2.5-flash-lite",
   "gemini-2.5-flash",
-  "gemini-1.5-flash-latest",
+  "gemini-2.0-flash",
 ].filter((model): model is string => Boolean(model));
+
+function isRetryableModelError(message: string): boolean {
+  return (
+    message.includes("404") ||
+    message.includes("not found") ||
+    message.includes("not supported") ||
+    message.includes("429") ||
+    message.includes("quota") ||
+    message.includes("limit: 0") ||
+    message.includes("Too Many Requests")
+  );
+}
+
+function toUserFriendlyError(message: string): string {
+  if (message.includes("limit: 0") || message.includes("free_tier")) {
+    return "当前 API 免费额度为 0，该模型不可用。请在 Google AI Studio 开启结算（仍可用免费额度），或在 Vercel 设置 GEMINI_MODEL=gemini-2.0-flash-lite 后重试。";
+  }
+  if (message.includes("429") || message.includes("quota")) {
+    return "请求过于频繁或免费额度已用完，请稍后再试，或到 https://ai.dev/rate-limit 查看配额。";
+  }
+  return message;
+}
 
 async function generateWithVision(
   apiKey: string,
@@ -59,16 +82,13 @@ async function generateWithVision(
     } catch (error) {
       lastError = error;
       const message = error instanceof Error ? error.message : "";
-      const retryable =
-        message.includes("404") ||
-        message.includes("not found") ||
-        message.includes("not supported");
-
-      if (!retryable) throw error;
+      if (!isRetryableModelError(message)) throw error;
     }
   }
 
-  throw lastError ?? new Error("No compatible Gemini model available");
+  const lastMessage =
+    lastError instanceof Error ? lastError.message : "No compatible Gemini model available";
+  throw new Error(toUserFriendlyError(lastMessage));
 }
 
 function parseCarsFromResponse(text: string): ScannedCar[] {
@@ -135,6 +155,6 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Scan API error:", error);
     const message = error instanceof Error ? error.message : "Scan failed";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json({ error: toUserFriendlyError(message) }, { status: 500 });
   }
 }
