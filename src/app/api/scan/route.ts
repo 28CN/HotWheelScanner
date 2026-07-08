@@ -27,12 +27,15 @@ For each car return a JSON object with these exact fields:
 Respond ONLY with a valid JSON array. No markdown, no explanation. Example:
 [{"id":"1","name":"'71 Porsche 911","series":"Mainline","batchYear":2025,"isTreasureHunt":false,"isHotModel":true,"isOnWishlist":false,"estimatedPriceUSD":3.5,"recommendation":"热门保时捷款，值得收藏"}]`;
 
+// Matched to free-tier quotas shown in Google AI Studio (Jul 2026).
+// Avoid gemini-2.0-* — those show 0/0/0 on current free plans.
 const DEFAULT_MODELS = [
   process.env.GEMINI_MODEL,
-  "gemini-2.0-flash-lite",
-  "gemini-2.5-flash-lite",
-  "gemini-2.5-flash",
-  "gemini-2.0-flash",
+  "gemini-3.1-flash-lite", // 15 RPM, 500 RPD — best free daily quota
+  "gemini-2.5-flash-lite", // 10 RPM, 20 RPD
+  "gemini-2.5-flash",      // 5 RPM, 20 RPD
+  "gemini-3.5-flash",      // 5 RPM, 20 RPD
+  "gemini-3-flash",        // 5 RPM, 20 RPD
 ].filter((model): model is string => Boolean(model));
 
 function isRetryableModelError(message: string): boolean {
@@ -49,7 +52,7 @@ function isRetryableModelError(message: string): boolean {
 
 function toUserFriendlyError(message: string): string {
   if (message.includes("limit: 0") || message.includes("free_tier")) {
-    return "当前 API 免费额度为 0，该模型不可用。请在 Google AI Studio 开启结算（仍可用免费额度），或在 Vercel 设置 GEMINI_MODEL=gemini-2.0-flash-lite 后重试。";
+    return "当前 API 免费额度为 0，该模型不可用。请在 Vercel 设置 GEMINI_MODEL=gemini-3.1-flash-lite（你账号下 500次/天），或到 AI Studio 开启结算。";
   }
   if (message.includes("429") || message.includes("quota")) {
     return "请求过于频繁或免费额度已用完，请稍后再试，或到 https://ai.dev/rate-limit 查看配额。";
