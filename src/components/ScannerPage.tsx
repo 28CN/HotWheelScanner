@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { Camera, ImageIcon, Zap, Layers, Loader2 } from "lucide-react";
+import { Camera, ImageIcon, Zap, Layers, Loader2, Sparkles } from "lucide-react";
 import type { ScanMode, ScannedCar } from "@/types/scan";
 import { getWishlist, saveScanSession } from "@/lib/storage";
 import ScanResults from "@/components/ScanResults";
@@ -82,7 +82,10 @@ export default function ScannerPage() {
         <h1 className="text-3xl font-black tracking-tight text-white">
           风火轮扫描器
         </h1>
-        <p className="mt-1 text-base text-zinc-400">AI 视觉辅助淘货神器</p>
+        <p className="mt-1 flex items-center gap-1.5 text-sm text-zinc-500">
+          <Sparkles className="h-4 w-4 text-amber-400" />
+          Powered by Gemini
+        </p>
       </header>
 
       {!cars && (

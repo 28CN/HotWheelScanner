@@ -1,14 +1,32 @@
 "use client";
 
 import type { ScannedCar } from "@/types/scan";
-import { Flame, Car, Star } from "lucide-react";
+import { Flame, Car, Star, BookOpen, Hash } from "lucide-react";
 
 interface CarCardProps {
   car: ScannedCar;
   index: number;
 }
 
+const CONFIDENCE_LABEL: Record<string, string> = {
+  high: "参考价 · 可信度高",
+  medium: "参考价 · 中等",
+  low: "参考价 · 仅供参考",
+};
+
+const CONFIDENCE_COLOR: Record<string, string> = {
+  high: "text-emerald-400",
+  medium: "text-amber-400",
+  low: "text-zinc-500",
+};
+
 export default function CarCard({ car, index }: CarCardProps) {
+  const confidence = car.priceConfidence ?? "medium";
+  const hasRange =
+    car.priceLowUSD != null &&
+    car.priceHighUSD != null &&
+    car.priceHighUSD > car.priceLowUSD;
+
   return (
     <article className="rounded-2xl border-2 border-zinc-700 bg-zinc-900 p-4">
       <div className="mb-2 flex items-start gap-3">
@@ -20,10 +38,27 @@ export default function CarCard({ car, index }: CarCardProps) {
           <p className="mt-1 text-base text-zinc-400">
             {car.series} · {car.batchYear}
           </p>
+          {car.collectorNumber && (
+            <p className="mt-0.5 flex items-center gap-1 text-sm text-zinc-500">
+              <Hash className="h-3.5 w-3.5" />
+              {car.collectorNumber}
+            </p>
+          )}
         </div>
-        <span className="shrink-0 text-xl font-black text-emerald-400">
-          ${car.estimatedPriceUSD.toFixed(2)}
-        </span>
+        <div className="shrink-0 text-right">
+          {hasRange ? (
+            <span className="text-lg font-black leading-tight text-emerald-400">
+              ${car.priceLowUSD!.toFixed(1)}–{car.priceHighUSD!.toFixed(1)}
+            </span>
+          ) : (
+            <span className="text-xl font-black text-emerald-400">
+              ${car.estimatedPriceUSD.toFixed(2)}
+            </span>
+          )}
+          <p className={`mt-0.5 text-[11px] ${CONFIDENCE_COLOR[confidence]}`}>
+            {CONFIDENCE_LABEL[confidence]}
+          </p>
+        </div>
       </div>
 
       <div className="mb-3 flex flex-wrap gap-2">
@@ -49,6 +84,16 @@ export default function CarCard({ car, index }: CarCardProps) {
 
       {car.recommendation && (
         <p className="text-base leading-relaxed text-zinc-300">{car.recommendation}</p>
+      )}
+
+      {car.story && (
+        <div className="mt-3 rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+          <p className="mb-1 flex items-center gap-1.5 text-sm font-bold text-amber-300">
+            <BookOpen className="h-4 w-4" />
+            车款故事
+          </p>
+          <p className="text-base leading-relaxed text-zinc-300">{car.story}</p>
+        </div>
       )}
     </article>
   );
